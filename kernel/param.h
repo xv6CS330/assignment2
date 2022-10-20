@@ -11,3 +11,8 @@
 #define NBUF         (MAXOPBLOCKS*3)  // size of disk block cache
 #define FSSIZE       2000  // size of file system in blocks
 #define MAXPATH      128   // maximum file path name
+
+#define SCHED_NPREEMPT_FCFS 0
+#define SCHED_NPREEMPT_SJF 1
+#define SCHED_PREEMPT_RR 2
+#define SCHED_PREEMPT_UNIX 3

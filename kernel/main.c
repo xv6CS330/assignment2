@@ -41,5 +41,6 @@ main()
     plicinithart();   // ask PLIC for device interrupts
   }
 
+  volatile int GLOBAL_SCHED_POLICY = SCHED_PREEMPT_RR;
   scheduler();        
 }

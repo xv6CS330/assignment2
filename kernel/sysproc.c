@@ -170,12 +170,14 @@ sys_pinfo(void)
 uint64
 sys_schedpolicy(void)
 {
-  int x;
+  int x, y;
 
   if(argint(0, &x) < 0)
     return -1;
   
-  return x;
+  y = GLOBAL_SCHED_POLICY;
+  GLOBAL_SCHED_POLICY = x;
+  return y;
 }
 
 uint64
