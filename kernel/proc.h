@@ -111,4 +111,8 @@ struct proc {
   int ctime;		       // Creation time
   int stime;		       // Execution start time
   int endtime;		       // Execution end time
+
+
+  int sjf_estm;           // Estimated execution time
+  int is_batch;             // Batch process
 };
