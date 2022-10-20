@@ -6,6 +6,7 @@
 
 volatile static int started = 0;
 
+int GLOBAL_SCHED_POLICY;
 // start() jumps here in supervisor mode on all CPUs.
 void
 main()
@@ -41,6 +42,6 @@ main()
     plicinithart();   // ask PLIC for device interrupts
   }
 
-  volatile int GLOBAL_SCHED_POLICY = SCHED_PREEMPT_RR;
-  scheduler();        
+  GLOBAL_SCHED_POLICY = SCHED_PREEMPT_RR;
+  scheduler();
 }
