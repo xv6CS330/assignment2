@@ -580,7 +580,7 @@ scheduler(void)
     }
 
     else if(GLOBAL_SCHED_POLICY==SCHED_NPREEMPT_FCFS){
-      intr_off();
+      intr_on();
 
       for(p = proc; p < &proc[NPROC]; p++) {
         if(GLOBAL_SCHED_POLICY!=SCHED_NPREEMPT_FCFS)break;
