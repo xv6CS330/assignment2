@@ -634,17 +634,26 @@ void scheduler(void)
         release(&p->lock);
       }
     }
-
     else if (GLOBAL_SCHED_POLICY == SCHED_NPREEMPT_SJF)
     {
       intr_on();
       struct proc *sj_index = proc;
       int sj_time = 1000000;
+      int sj_flag = 0;
+      sj_flag = 1;
       for (p = proc; p < &proc[NPROC]; p++)
       {
         if (GLOBAL_SCHED_POLICY != SCHED_NPREEMPT_SJF)
           break;
-        if (p->is_batch == 0)
+
+        if(p->is_batch == 1)
+        {
+          if(sj_time > p->sjf_estm){
+            sj_time = p->sjf_estm;
+            sj_index = p;
+          }
+        }
+        else if(p->is_batch == 0)
         {
           acquire(&p->lock);
           if (p->state == RUNNABLE)
@@ -660,17 +669,11 @@ void scheduler(void)
             // It should have changed its p->state before coming back.
             c->proc = 0;
           }
+          sj_flag = 1;
           release(&p->lock);
-          break;
-        }
-        else
-        {
-          if(sj_time > p->sjf_estm){
-            sj_time = p->sjf_estm;
-            sj_index = p;
-          }
         }
       }
+      if(sj_flag==1)break;
       p = sj_index;
       acquire(&p->lock);
         if (p->state == RUNNABLE)
@@ -680,17 +683,40 @@ void scheduler(void)
           // before jumping back to us.
           p->state = RUNNING;
           c->proc = p;
+          int old_estm = p->sjf_estm;
+          uint sticks;
+          if (!holding(&tickslock)) {
+            acquire(&tickslock);
+            sticks = ticks;
+            release(&tickslock);
+          }
+          else sticks = ticks;
+
           swtch(&c->context, &p->context);
+
 
           // Process is done running for now.
           // It should have changed its p->state before coming back.
+          uint eticks;
+          if (!holding(&tickslock)) {
+            acquire(&tickslock);
+            eticks = ticks;
+            release(&tickslock);
+          }
+          else eticks = ticks;
+
+          int cpu_burst = eticks - sticks;
+          if(cpu_burst > 0){
+            int new_estm = cpu_burst - (SCHED_PARAM_SJF_A_NUMER*cpu_burst)/SCHED_PARAM_SJF_A_DENOM + (SCHED_PARAM_SJF_A_NUMER*old_estm)/SCHED_PARAM_SJF_A_DENOM;
+            p->sjf_estm = new_estm;
+          }
+
           c->proc = 0;
         }
         release(&p->lock);
     }
   }
 }
-
 // Switch to scheduler.  Must hold only p->lock
 // and have changed proc->state. Saves and restores
 // intena because intena is a property of this
