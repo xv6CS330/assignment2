@@ -658,6 +658,7 @@ void scheduler(void)
           acquire(&p->lock);
           if (p->state == RUNNABLE)
           {
+          printf("Pro:%d\n", p-proc);
             // Switch to chosen process.  It is the process's job
             // to release its lock and then reacquire it
             // before jumping back to us.
@@ -673,7 +674,7 @@ void scheduler(void)
           release(&p->lock);
         }
       }
-      if(sj_flag==1)break;
+      if(sj_flag==1)continue;
       p = sj_index;
       acquire(&p->lock);
         if (p->state == RUNNABLE)
