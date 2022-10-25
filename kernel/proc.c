@@ -695,21 +695,22 @@ void scheduler(void)
     {
       struct proc *unix_index = proc;
       int unix_prio = 1000000;
-
+      printf("\n");
       for (p = proc; p < &proc[NPROC]; p++)
       {
         if (GLOBAL_SCHED_POLICY != SCHED_PREEMPT_UNIX)
           break;
-        if(p-> state != RUNNABLE) continue;
+        //if(p-> state != RUNNABLE) continue;
         if( p->is_batch == 1)
-        {
+        {  //printf("pid= %d, PriorityBefore= %d , state = %d ", p->pid, p->priority, p->state);
           p->cpu_usage = p->cpu_usage / 2;
           p->priority = p->baseprio + p->cpu_usage/2;
 
-          if(unix_prio > p->priority){
+          if(unix_prio > p->priority && p-> state == RUNNABLE){
             unix_prio = p->priority;
             unix_index = p;
           }
+          //printf("PriorityAfter= %d\n", p->priority);
         }
         else if(p->is_batch == 0)  // Schedule the process immediately
         {

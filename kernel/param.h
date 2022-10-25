@@ -21,3 +21,5 @@
 #define SCHED_PARAM_SJF_A_DENOM 2  // q
 
 #define SCHED_PARAM_CPU_USAGE 200 
+
+#define TIMER_INTERVAL 10000000 // Timer
