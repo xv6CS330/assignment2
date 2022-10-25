@@ -19,6 +19,6 @@ main(int argc, char *argv[])
     }
     end_time = uptime();
     printf("\nTotal sum: %d\n", sum);
-    printf("Start time: %d, End time: %d, Total time: %d\n", start_time, end_time, end_time-start_time);
+    printf("Start time: %d, End time: %d, Total time: %d, pid = %d\n", start_time, end_time, end_time-start_time, pid);
     exit(0);
 }

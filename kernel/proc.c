@@ -581,15 +581,15 @@ void scheduler(void)
   c->proc = 0;
   for (;;)
   {
+    // Avoid deadlock by ensuring that devices can interrupt.
+    intr_on();
 
-    if (GLOBAL_SCHED_POLICY == SCHED_PREEMPT_RR)
+    while (GLOBAL_SCHED_POLICY == SCHED_PREEMPT_RR || GLOBAL_SCHED_POLICY == SCHED_NPREEMPT_FCFS)
     {
-      // Avoid deadlock by ensuring that devices can interrupt.
-      intr_on();
-
+      
       for (p = proc; p < &proc[NPROC]; p++)
       {
-        if (GLOBAL_SCHED_POLICY != SCHED_PREEMPT_RR)
+        if (GLOBAL_SCHED_POLICY != SCHED_PREEMPT_RR && GLOBAL_SCHED_POLICY != SCHED_NPREEMPT_FCFS)
           break;
         acquire(&p->lock);
         if (p->state == RUNNABLE)
@@ -609,50 +609,24 @@ void scheduler(void)
       }
     }
 
-    else if (GLOBAL_SCHED_POLICY == SCHED_NPREEMPT_FCFS)
+    while (GLOBAL_SCHED_POLICY == SCHED_NPREEMPT_SJF)
     {
-      intr_on();
-
-      for (p = proc; p < &proc[NPROC]; p++)
-      {
-        if (GLOBAL_SCHED_POLICY != SCHED_NPREEMPT_FCFS)
-          break;
-        acquire(&p->lock);
-        if (p->state == RUNNABLE)
-        {
-          // Switch to chosen process.  It is the process's job
-          // to release its lock and then reacquire it
-          // before jumping back to us.
-          p->state = RUNNING;
-          c->proc = p;
-          swtch(&c->context, &p->context);
-
-          // Process is done running for now.
-          // It should have changed its p->state before coming back.
-          c->proc = 0;
-        }
-        release(&p->lock);
-      }
-    }
-    else if (GLOBAL_SCHED_POLICY == SCHED_NPREEMPT_SJF)
-    {
-      intr_on();
       struct proc *sj_index = proc;
       int sj_time = 1000000;
-      int sj_flag = 0;
+
       for (p = proc; p < &proc[NPROC]; p++)
       {
         if (GLOBAL_SCHED_POLICY != SCHED_NPREEMPT_SJF)
           break;
-
-        if(p->is_batch == 1)
+        if(p-> state != RUNNABLE) continue;
+        if( p->is_batch == 1)
         {
           if(sj_time > p->sjf_estm){
             sj_time = p->sjf_estm;
             sj_index = p;
           }
         }
-        else if(p->is_batch == 0)
+        else if(p->is_batch == 0)  // Schedule the process immediately
         {
           acquire(&p->lock);
           if (p->state == RUNNABLE)
@@ -668,13 +642,13 @@ void scheduler(void)
             // It should have changed its p->state before coming back.
             c->proc = 0;
           }
-          // sj_flag = 1;
+         
           release(&p->lock);
         }
       }
-      if(sj_flag==1)continue;
+
       p = sj_index;
-      printf(" %d ", p->sjf_estm);
+     
       acquire(&p->lock);
         if (p->state == RUNNABLE && p->is_batch == 1)
         {
@@ -694,11 +668,6 @@ void scheduler(void)
 
           swtch(&c->context, &p->context);
 
-
-          // Process is done running for now.
-          // It should have changed its p->state before coming back.
-                    c->proc = 0;
-
           uint eticks;
           if (!holding(&tickslock)) {
             acquire(&tickslock);
@@ -706,14 +675,17 @@ void scheduler(void)
             release(&tickslock);
           }
           else eticks = ticks;
-
+           printf(" %d ", p->sjf_estm);
           int cpu_burst = eticks - sticks;
           if(cpu_burst > 0){
             int new_estm = cpu_burst - (SCHED_PARAM_SJF_A_NUMER*cpu_burst)/SCHED_PARAM_SJF_A_DENOM + (SCHED_PARAM_SJF_A_NUMER*old_estm)/SCHED_PARAM_SJF_A_DENOM;
             p->sjf_estm = new_estm;
           }
+           // Process is done running for now.
+          // It should have changed its p->state before coming back.
+          c->proc = 0;
 
-          printf("%d\n", p->sjf_estm);
+          printf(" %d\n", p->sjf_estm);
 
         }
         release(&p->lock);
