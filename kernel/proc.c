@@ -652,7 +652,6 @@ void scheduler(void)
       acquire(&p->lock);
         if (p->state == RUNNABLE && p->is_batch == 1)
         {
-          printf(" %d ", p->sjf_estm);
           // Switch to chosen process.  It is the process's job
           // to release its lock and then reacquire it
           // before jumping back to us.
