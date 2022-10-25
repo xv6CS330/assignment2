@@ -690,6 +690,74 @@ void scheduler(void)
         }
         release(&p->lock);
     }
+    /****************************/
+    while (GLOBAL_SCHED_POLICY == SCHED_PREEMPT_UNIX)
+    {
+      struct proc *unix_index = proc;
+      int unix_prio = 1000000;
+
+      for (p = proc; p < &proc[NPROC]; p++)
+      {
+        if (GLOBAL_SCHED_POLICY != SCHED_PREEMPT_UNIX)
+          break;
+        if(p-> state != RUNNABLE) continue;
+        if( p->is_batch == 1)
+        {
+          p->cpu_usage = p->cpu_usage / 2;
+          p->priority = p->baseprio + p->cpu_usage/2;
+
+          if(unix_prio > p->priority){
+            unix_prio = p->priority;
+            unix_index = p;
+          }
+        }
+        else if(p->is_batch == 0)  // Schedule the process immediately
+        {
+          acquire(&p->lock);
+          if (p->state == RUNNABLE)
+          {
+            // Switch to chosen process.  It is the process's job
+            // to release its lock and then reacquire it
+            // before jumping back to us.
+            p->state = RUNNING;
+            c->proc = p;
+            swtch(&c->context, &p->context);
+
+            // Process is done running for now.
+            // It should have changed its p->state before coming back.
+            c->proc = 0;
+          }
+         
+          release(&p->lock);
+        }
+      }
+
+      p = unix_index;
+     
+      acquire(&p->lock);
+        if (p->state == RUNNABLE && p->is_batch == 1)
+        { printf("%d ** Priority= %d ****  \n", p->pid, p->priority);
+          // Switch to chosen process.  It is the process's job
+          // to release its lock and then reacquire it
+          // before jumping back to us.
+          p->state = RUNNING;
+          c->proc = p;
+
+          swtch(&c->context, &p->context);
+
+          if(p->state == RUNNABLE){
+            p->cpu_usage = p->cpu_usage + SCHED_PARAM_CPU_USAGE;
+          }
+          else if(p->state == SLEEPING){
+            p->cpu_usage = p->cpu_usage + SCHED_PARAM_CPU_USAGE / 2;
+          }
+           // Process is done running for now.
+          // It should have changed its p->state before coming back.
+          c->proc = 0;
+
+        }
+        release(&p->lock);
+    }
   }
 }
 // Switch to scheduler.  Must hold only p->lock
@@ -714,6 +782,7 @@ void sched(void)
     panic("sched interruptible");
 
   intena = mycpu()->intena;
+
   swtch(&p->context, &mycpu()->context);
   mycpu()->intena = intena;
 }
@@ -1071,5 +1140,8 @@ int forkp(int prio)
 
   np->baseprio = prio;
   np->is_batch = 1;
+  
+  np->cpu_usage = 0;
+  np->priority = prio;
   return pid;
 }

@@ -19,3 +19,5 @@
 
 #define SCHED_PARAM_SJF_A_NUMER 1  // p
 #define SCHED_PARAM_SJF_A_DENOM 2  // q
+
+#define SCHED_PARAM_CPU_USAGE 200 

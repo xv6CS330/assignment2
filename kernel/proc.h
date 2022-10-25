@@ -115,4 +115,7 @@ struct proc {
 
   int sjf_estm;           // Estimated execution time
   int is_batch;             // Batch process
+  
+  int cpu_usage;        // CPU usage for UNIX schedular
+  int priority;        // Priority value of process for UNIX Schedular
 };
