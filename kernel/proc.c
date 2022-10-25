@@ -645,7 +645,7 @@ void scheduler(void)
         if (GLOBAL_SCHED_POLICY != SCHED_NPREEMPT_SJF)
           break;
 
-        if(p->is_batch == 1)
+        if(p->is_batch == 1 && p->state == RUNNABLE)
         {
           if(sj_time > p->sjf_estm){
             sj_time = p->sjf_estm;
@@ -674,10 +674,10 @@ void scheduler(void)
       }
       if(sj_flag==1)continue;
       p = sj_index;
-      printf(" %d ", p->sjf_estm);
       acquire(&p->lock);
         if (p->state == RUNNABLE && p->is_batch == 1)
         {
+          printf(" %d ", p->sjf_estm);
           // Switch to chosen process.  It is the process's job
           // to release its lock and then reacquire it
           // before jumping back to us.
@@ -697,7 +697,6 @@ void scheduler(void)
 
           // Process is done running for now.
           // It should have changed its p->state before coming back.
-                    c->proc = 0;
 
           uint eticks;
           if (!holding(&tickslock)) {
@@ -714,6 +713,7 @@ void scheduler(void)
           }
 
           printf("%d\n", p->sjf_estm);
+                    c->proc = 0;
 
         }
         release(&p->lock);
