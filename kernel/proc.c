@@ -640,7 +640,6 @@ void scheduler(void)
       struct proc *sj_index = proc;
       int sj_time = 1000000;
       int sj_flag = 0;
-      sj_flag = 1;
       for (p = proc; p < &proc[NPROC]; p++)
       {
         if (GLOBAL_SCHED_POLICY != SCHED_NPREEMPT_SJF)
@@ -658,7 +657,6 @@ void scheduler(void)
           acquire(&p->lock);
           if (p->state == RUNNABLE)
           {
-          printf("Pro:%d\n", p-proc);
             // Switch to chosen process.  It is the process's job
             // to release its lock and then reacquire it
             // before jumping back to us.
@@ -670,14 +668,15 @@ void scheduler(void)
             // It should have changed its p->state before coming back.
             c->proc = 0;
           }
-          sj_flag = 1;
+          // sj_flag = 1;
           release(&p->lock);
         }
       }
       if(sj_flag==1)continue;
       p = sj_index;
+      printf(" %d ", p->sjf_estm);
       acquire(&p->lock);
-        if (p->state == RUNNABLE)
+        if (p->state == RUNNABLE && p->is_batch == 1)
         {
           // Switch to chosen process.  It is the process's job
           // to release its lock and then reacquire it
@@ -698,6 +697,8 @@ void scheduler(void)
 
           // Process is done running for now.
           // It should have changed its p->state before coming back.
+                    c->proc = 0;
+
           uint eticks;
           if (!holding(&tickslock)) {
             acquire(&tickslock);
@@ -712,7 +713,8 @@ void scheduler(void)
             p->sjf_estm = new_estm;
           }
 
-          c->proc = 0;
+          printf("%d\n", p->sjf_estm);
+
         }
         release(&p->lock);
     }
