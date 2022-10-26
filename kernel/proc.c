@@ -664,7 +664,6 @@ void scheduler(void)
             else
               batch_start_time = ticks;
           }
-
           if (p->is_batch == 1)
           {
             uint temp_time;
@@ -749,6 +748,31 @@ void scheduler(void)
         }
         else
           sticks = ticks;
+        /****stats*/
+        if (p->is_batch == 1 && batch_start_time == -1)
+          {
+            if (!holding(&tickslock))
+            {
+              acquire(&tickslock);
+              batch_start_time = ticks;
+              release(&tickslock);
+            }
+            else
+              batch_start_time = ticks;
+          }
+          if (p->is_batch == 1)
+          {
+            uint temp_time;
+            if (!holding(&tickslock))
+            {
+              acquire(&tickslock);
+              temp_time = ticks;
+              release(&tickslock);
+            }
+            else
+              temp_time = ticks;
+            p->total_waiting_time = p->total_waiting_time + temp_time - p->temp_wait_start;
+          }
 
         swtch(&c->context, &p->context);
 
@@ -781,7 +805,7 @@ void scheduler(void)
     {
       struct proc *unix_index = proc;
       int unix_prio = 1000000;
-      printf("\n");
+      
       for (p = proc; p < &proc[NPROC]; p++)
       {
         if (GLOBAL_SCHED_POLICY != SCHED_PREEMPT_UNIX)
@@ -825,12 +849,36 @@ void scheduler(void)
       acquire(&p->lock);
       if (p->state == RUNNABLE && p->is_batch == 1)
       {
-        printf("%d ** Priority= %d ****  \n", p->pid, p->priority);
+        //printf("%d ** Priority= %d ****  \n", p->pid, p->priority);
         // Switch to chosen process.  It is the process's job
         // to release its lock and then reacquire it
         // before jumping back to us.
         p->state = RUNNING;
         c->proc = p;
+        if (p->is_batch == 1 && batch_start_time == -1)
+          {
+            if (!holding(&tickslock))
+            {
+              acquire(&tickslock);
+              batch_start_time = ticks;
+              release(&tickslock);
+            }
+            else
+              batch_start_time = ticks;
+          }
+          if (p->is_batch == 1)
+          {
+            uint temp_time;
+            if (!holding(&tickslock))
+            {
+              acquire(&tickslock);
+              temp_time = ticks;
+              release(&tickslock);
+            }
+            else
+              temp_time = ticks;
+            p->total_waiting_time = p->total_waiting_time + temp_time - p->temp_wait_start;
+          }
 
         swtch(&c->context, &p->context);
 
