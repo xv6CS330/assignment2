@@ -701,12 +701,12 @@ void scheduler(void)
         if (GLOBAL_SCHED_POLICY != SCHED_PREEMPT_UNIX)
           break;
         //if(p-> state != RUNNABLE) continue;
-        if( p->is_batch == 1)
+        if( p->is_batch == 1 && p-> state == RUNNABLE)
         {  //printf("pid= %d, PriorityBefore= %d , state = %d ", p->pid, p->priority, p->state);
           p->cpu_usage = p->cpu_usage / 2;
           p->priority = p->baseprio + p->cpu_usage/2;
 
-          if(unix_prio > p->priority && p-> state == RUNNABLE){
+          if(unix_prio > p->priority ){
             unix_prio = p->priority;
             unix_index = p;
           }
