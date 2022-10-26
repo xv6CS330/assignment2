@@ -33,9 +33,20 @@ int batch_start_time = -1;
 int batch_end_time = -1;
 int total_turn_time = 0;
 int total_waiting_time = 0;
-int min_completion_time = -1;
+int min_completion_time = __INT32_MAX__;
 int max_completion_time = -1;
 int sum_completion_time = 0;
+int total_cpu_bursts_count = 0;
+int min_cpu_burst = __INT32_MAX__;
+int max_cpu_burst = -1;
+int sum_cpu_bursts = 0;
+int min_estm_burst = __INT32_MAX__;
+int max_estm_burst = -1;
+int sum_estm_bursts = 0;
+int total_estm_count = 0;
+
+int total_burst_error_count = 0;
+int sum_bursts_error = 0;
 
 // Allocate a page for each process's kernel stack.
 // Map it high in memory, followed by an invalid
@@ -501,12 +512,34 @@ void exit(int status)
       printf("Average turn-around time: %d\n", total_turn_time / batch_proc_count);
       printf("Average waiting time: %d\n", total_waiting_time / batch_proc_count);
       printf("Completion time: avg: %d, max: %d, min: %d\n", sum_completion_time / batch_proc_count, max_completion_time, min_completion_time);
+      if(GLOBAL_SCHED_POLICY == SCHED_NPREEMPT_SJF){
+        printf("CPU bursts: count: %d, avg: %d, max: %d, min: %d\n", total_cpu_bursts_count, sum_cpu_bursts/total_cpu_bursts_count, max_cpu_burst, min_cpu_burst);
+        printf("CPU burst estimates: count: %d, avg: %d, max: %d, min: %d\n",total_estm_count, sum_estm_bursts/total_cpu_bursts_count, max_estm_burst, min_estm_burst );
+        printf("CPU burst estimation error: count: %d, avg: %d\n", total_burst_error_count, sum_bursts_error/total_burst_error_count);
 
+      }
+      
       batch_start_time = -1;
       batch_end_time = -1;
       batch_proc_count = 0;
       total_turn_time = 0;
       total_waiting_time = 0;
+      temp_completion_time = 0;
+      min_completion_time = __INT32_MAX__;
+      max_completion_time = -1;
+      sum_completion_time = 0;
+
+      total_cpu_bursts_count = 0;
+      min_cpu_burst = __INT32_MAX__;
+      max_cpu_burst = -1;
+      sum_cpu_bursts = 0;
+      min_estm_burst = __INT32_MAX__;
+      max_estm_burst = -1;
+      sum_estm_bursts = 0;
+      total_estm_count = 0;    
+      total_burst_error_count = 0;
+      sum_bursts_error = 0;
+
     }
   }
 
@@ -691,7 +724,7 @@ void scheduler(void)
     while (GLOBAL_SCHED_POLICY == SCHED_NPREEMPT_SJF)
     {
       struct proc *sj_index = proc;
-      int sj_time = 1000000;
+      int sj_time = __INT32_MAX__;
 
       for (p = proc; p < &proc[NPROC]; p++)
       {
@@ -787,10 +820,41 @@ void scheduler(void)
           eticks = ticks;
         printf(" %d ", p->sjf_estm);
         int cpu_burst = eticks - sticks;
+        if(p->sjf_estm > 0){
+          total_estm_count++;
+          sum_estm_bursts += p->sjf_estm;
+          if(p->sjf_estm < min_estm_burst){
+            min_estm_burst = p->sjf_estm;
+          }
+          if(p->sjf_estm > max_estm_burst){
+            max_estm_burst = p->sjf_estm;
+          }
+        }
         if (cpu_burst > 0)
-        {
+        {  /****CPU BURSTS******/
+          total_cpu_bursts_count++;
+          sum_cpu_bursts += cpu_burst;
+          if(cpu_burst < min_cpu_burst){
+            min_cpu_burst = cpu_burst;
+          }
+          if(cpu_burst > max_cpu_burst){
+            max_cpu_burst = cpu_burst;
+          }
+
+          if(p->sjf_estm > 0){
+            total_burst_error_count++;
+            if(cpu_burst > p->sjf_estm){
+              sum_bursts_error += cpu_burst - p->sjf_estm;
+            }
+            else {
+              sum_bursts_error += p->sjf_estm - cpu_burst;
+            }
+            
+          }
+          /************/
           int new_estm = cpu_burst - (SCHED_PARAM_SJF_A_NUMER * cpu_burst) / SCHED_PARAM_SJF_A_DENOM + (SCHED_PARAM_SJF_A_NUMER * old_estm) / SCHED_PARAM_SJF_A_DENOM;
           p->sjf_estm = new_estm;
+          
         }
         // Process is done running for now.
         // It should have changed its p->state before coming back.
@@ -804,7 +868,7 @@ void scheduler(void)
     while (GLOBAL_SCHED_POLICY == SCHED_PREEMPT_UNIX)
     {
       struct proc *unix_index = proc;
-      int unix_prio = 1000000;
+      int unix_prio = __INT32_MAX__;
       
       for (p = proc; p < &proc[NPROC]; p++)
       {
