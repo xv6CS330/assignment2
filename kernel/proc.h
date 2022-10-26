@@ -118,4 +118,7 @@ struct proc {
   
   int cpu_usage;        // CPU usage for UNIX schedular
   int priority;        // Priority value of process for UNIX Schedular
+
+  int total_waiting_time;
+  int temp_wait_start;
 };

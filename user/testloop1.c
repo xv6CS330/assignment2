@@ -15,7 +15,7 @@ main(int argc, char *argv[])
     for (k=0; k<OUTER_BOUND; k++) {
        for (j=0; j<INNER_BOUND; j++) for (i=0; i<SIZE; i++) sum += array[i];
        fprintf(1, "%d", pid);
-    //    sleep(1);
+       sleep(1);
     }
     end_time = uptime();
     printf("\nTotal sum: %d\n", sum);

@@ -32,6 +32,10 @@ int batch_proc_count = 0;
 int batch_start_time = -1;
 int batch_end_time = -1;
 int total_turn_time = 0;
+int total_waiting_time = 0;
+int min_completion_time = -1;
+int max_completion_time = -1;
+int sum_completion_time = 0;
 
 // Allocate a page for each process's kernel stack.
 // Map it high in memory, followed by an invalid
@@ -463,22 +467,46 @@ void exit(int status)
 
   p->endtime = xticks;
 
-  if(p->is_batch==1){
+  if (p->is_batch == 1)
+  {
+    uint temp_completion_time;
+    if (!holding(&tickslock))
+    {
+      acquire(&tickslock);
+      temp_completion_time = ticks;
+      release(&tickslock);
+    }
+    else
+      temp_completion_time = ticks;
+    if(min_completion_time > temp_completion_time){
+      min_completion_time = temp_completion_time;
+    }
+    sum_completion_time += temp_completion_time;
+
     batch_size--;
-    total_turn_time += p->endtime-p->stime;
-    if(batch_size==0 && batch_end_time == -1){
-      if (!holding(&tickslock)) {
+    total_turn_time += p->endtime - p->stime;
+    total_waiting_time += p->total_waiting_time;
+    if (batch_size == 0 && batch_end_time == -1)
+    {
+      if (!holding(&tickslock))
+      {
         acquire(&tickslock);
         batch_end_time = ticks;
         release(&tickslock);
       }
-      printf("Batch Execution Time: %d\n",batch_end_time-batch_start_time);
-      printf("Average turn-around time: %d\n",total_turn_time/batch_proc_count);
+      else
+        batch_end_time = ticks;
+      max_completion_time = batch_end_time;
+      printf("Batch Execution Time: %d\n", batch_end_time - batch_start_time);
+      printf("Average turn-around time: %d\n", total_turn_time / batch_proc_count);
+      printf("Average waiting time: %d\n", total_waiting_time / batch_proc_count);
+      printf("Completion time: avg: %d, max: %d, min: %d\n", sum_completion_time / batch_proc_count, max_completion_time, min_completion_time);
 
       batch_start_time = -1;
       batch_end_time = -1;
       batch_proc_count = 0;
       total_turn_time = 0;
+      total_waiting_time = 0;
     }
   }
 
@@ -611,7 +639,7 @@ void scheduler(void)
 
     while (GLOBAL_SCHED_POLICY == SCHED_PREEMPT_RR || GLOBAL_SCHED_POLICY == SCHED_NPREEMPT_FCFS)
     {
-      
+
       for (p = proc; p < &proc[NPROC]; p++)
       {
         if (GLOBAL_SCHED_POLICY != SCHED_PREEMPT_RR && GLOBAL_SCHED_POLICY != SCHED_NPREEMPT_FCFS)
@@ -625,13 +653,30 @@ void scheduler(void)
           p->state = RUNNING;
           c->proc = p;
 
-          if(p->is_batch == 1 && batch_start_time == -1){
-            if (!holding(&tickslock)) {
+          if (p->is_batch == 1 && batch_start_time == -1)
+          {
+            if (!holding(&tickslock))
+            {
               acquire(&tickslock);
               batch_start_time = ticks;
               release(&tickslock);
             }
-            else batch_start_time = ticks;
+            else
+              batch_start_time = ticks;
+          }
+
+          if (p->is_batch == 1)
+          {
+            uint temp_time;
+            if (!holding(&tickslock))
+            {
+              acquire(&tickslock);
+              temp_time = ticks;
+              release(&tickslock);
+            }
+            else
+              temp_time = ticks;
+            p->total_waiting_time = p->total_waiting_time + temp_time - p->temp_wait_start;
           }
 
           swtch(&c->context, &p->context);
@@ -653,15 +698,17 @@ void scheduler(void)
       {
         if (GLOBAL_SCHED_POLICY != SCHED_NPREEMPT_SJF)
           break;
-        if(p-> state != RUNNABLE) continue;
-        if( p->is_batch == 1)
+        if (p->state != RUNNABLE)
+          continue;
+        if (p->is_batch == 1)
         {
-          if(sj_time > p->sjf_estm){
+          if (sj_time > p->sjf_estm)
+          {
             sj_time = p->sjf_estm;
             sj_index = p;
           }
         }
-        else if(p->is_batch == 0)  // Schedule the process immediately
+        else if (p->is_batch == 0) // Schedule the process immediately
         {
           acquire(&p->lock);
           if (p->state == RUNNABLE)
@@ -677,53 +724,57 @@ void scheduler(void)
             // It should have changed its p->state before coming back.
             c->proc = 0;
           }
-         
+
           release(&p->lock);
         }
       }
 
       p = sj_index;
-     
+
       acquire(&p->lock);
-        if (p->state == RUNNABLE && p->is_batch == 1)
+      if (p->state == RUNNABLE && p->is_batch == 1)
+      {
+        // Switch to chosen process.  It is the process's job
+        // to release its lock and then reacquire it
+        // before jumping back to us.
+        p->state = RUNNING;
+        c->proc = p;
+        int old_estm = p->sjf_estm;
+        uint sticks;
+        if (!holding(&tickslock))
         {
-          // Switch to chosen process.  It is the process's job
-          // to release its lock and then reacquire it
-          // before jumping back to us.
-          p->state = RUNNING;
-          c->proc = p;
-          int old_estm = p->sjf_estm;
-          uint sticks;
-          if (!holding(&tickslock)) {
-            acquire(&tickslock);
-            sticks = ticks;
-            release(&tickslock);
-          }
-          else sticks = ticks;
-
-          swtch(&c->context, &p->context);
-
-          uint eticks;
-          if (!holding(&tickslock)) {
-            acquire(&tickslock);
-            eticks = ticks;
-            release(&tickslock);
-          }
-          else eticks = ticks;
-           printf(" %d ", p->sjf_estm);
-          int cpu_burst = eticks - sticks;
-          if(cpu_burst > 0){
-            int new_estm = cpu_burst - (SCHED_PARAM_SJF_A_NUMER*cpu_burst)/SCHED_PARAM_SJF_A_DENOM + (SCHED_PARAM_SJF_A_NUMER*old_estm)/SCHED_PARAM_SJF_A_DENOM;
-            p->sjf_estm = new_estm;
-          }
-           // Process is done running for now.
-          // It should have changed its p->state before coming back.
-          c->proc = 0;
-
-          printf(" %d\n", p->sjf_estm);
-
+          acquire(&tickslock);
+          sticks = ticks;
+          release(&tickslock);
         }
-        release(&p->lock);
+        else
+          sticks = ticks;
+
+        swtch(&c->context, &p->context);
+
+        uint eticks;
+        if (!holding(&tickslock))
+        {
+          acquire(&tickslock);
+          eticks = ticks;
+          release(&tickslock);
+        }
+        else
+          eticks = ticks;
+        printf(" %d ", p->sjf_estm);
+        int cpu_burst = eticks - sticks;
+        if (cpu_burst > 0)
+        {
+          int new_estm = cpu_burst - (SCHED_PARAM_SJF_A_NUMER * cpu_burst) / SCHED_PARAM_SJF_A_DENOM + (SCHED_PARAM_SJF_A_NUMER * old_estm) / SCHED_PARAM_SJF_A_DENOM;
+          p->sjf_estm = new_estm;
+        }
+        // Process is done running for now.
+        // It should have changed its p->state before coming back.
+        c->proc = 0;
+
+        printf(" %d\n", p->sjf_estm);
+      }
+      release(&p->lock);
     }
     /****************************/
     while (GLOBAL_SCHED_POLICY == SCHED_PREEMPT_UNIX)
@@ -735,19 +786,20 @@ void scheduler(void)
       {
         if (GLOBAL_SCHED_POLICY != SCHED_PREEMPT_UNIX)
           break;
-        //if(p-> state != RUNNABLE) continue;
-        if( p->is_batch == 1 && p-> state == RUNNABLE)
-        {  //printf("pid= %d, PriorityBefore= %d , state = %d ", p->pid, p->priority, p->state);
+        // if(p-> state != RUNNABLE) continue;
+        if (p->is_batch == 1 && p->state == RUNNABLE)
+        { // printf("pid= %d, PriorityBefore= %d , state = %d ", p->pid, p->priority, p->state);
           p->cpu_usage = p->cpu_usage / 2;
-          p->priority = p->baseprio + p->cpu_usage/2;
+          p->priority = p->baseprio + p->cpu_usage / 2;
 
-          if(unix_prio > p->priority ){
+          if (unix_prio > p->priority)
+          {
             unix_prio = p->priority;
             unix_index = p;
           }
-          //printf("PriorityAfter= %d\n", p->priority);
+          // printf("PriorityAfter= %d\n", p->priority);
         }
-        else if(p->is_batch == 0)  // Schedule the process immediately
+        else if (p->is_batch == 0) // Schedule the process immediately
         {
           acquire(&p->lock);
           if (p->state == RUNNABLE)
@@ -763,36 +815,38 @@ void scheduler(void)
             // It should have changed its p->state before coming back.
             c->proc = 0;
           }
-         
+
           release(&p->lock);
         }
       }
 
       p = unix_index;
-     
+
       acquire(&p->lock);
-        if (p->state == RUNNABLE && p->is_batch == 1)
-        { printf("%d ** Priority= %d ****  \n", p->pid, p->priority);
-          // Switch to chosen process.  It is the process's job
-          // to release its lock and then reacquire it
-          // before jumping back to us.
-          p->state = RUNNING;
-          c->proc = p;
+      if (p->state == RUNNABLE && p->is_batch == 1)
+      {
+        printf("%d ** Priority= %d ****  \n", p->pid, p->priority);
+        // Switch to chosen process.  It is the process's job
+        // to release its lock and then reacquire it
+        // before jumping back to us.
+        p->state = RUNNING;
+        c->proc = p;
 
-          swtch(&c->context, &p->context);
+        swtch(&c->context, &p->context);
 
-          if(p->state == RUNNABLE){
-            p->cpu_usage = p->cpu_usage + SCHED_PARAM_CPU_USAGE;
-          }
-          else if(p->state == SLEEPING){
-            p->cpu_usage = p->cpu_usage + SCHED_PARAM_CPU_USAGE / 2;
-          }
-           // Process is done running for now.
-          // It should have changed its p->state before coming back.
-          c->proc = 0;
-
+        if (p->state == RUNNABLE)
+        {
+          p->cpu_usage = p->cpu_usage + SCHED_PARAM_CPU_USAGE;
         }
-        release(&p->lock);
+        else if (p->state == SLEEPING)
+        {
+          p->cpu_usage = p->cpu_usage + SCHED_PARAM_CPU_USAGE / 2;
+        }
+        // Process is done running for now.
+        // It should have changed its p->state before coming back.
+        c->proc = 0;
+      }
+      release(&p->lock);
     }
   }
 }
@@ -829,6 +883,17 @@ void yield(void)
   struct proc *p = myproc();
   acquire(&p->lock);
   p->state = RUNNABLE;
+  if (p->is_batch == 1)
+  {
+    if (!holding(&tickslock))
+    {
+      acquire(&tickslock);
+      p->temp_wait_start = ticks;
+      release(&tickslock);
+    }
+    else
+      p->temp_wait_start = ticks;
+  }
   sched();
   release(&p->lock);
 }
@@ -905,6 +970,17 @@ void wakeup(void *chan)
       if (p->state == SLEEPING && p->chan == chan)
       {
         p->state = RUNNABLE;
+        if (p->is_batch == 1)
+        {
+          if (!holding(&tickslock))
+          {
+            acquire(&tickslock);
+            p->temp_wait_start = ticks;
+            release(&tickslock);
+          }
+          else
+            p->temp_wait_start = ticks;
+        }
       }
       release(&p->lock);
     }
@@ -1176,11 +1252,22 @@ int forkp(int prio)
 
   np->baseprio = prio;
   np->is_batch = 1;
-  
+
   np->cpu_usage = 0;
   np->priority = prio;
 
   batch_size++;
   batch_proc_count++;
+
+  np->total_waiting_time = 0;
+  if (!holding(&tickslock))
+  {
+    acquire(&tickslock);
+    np->temp_wait_start = ticks;
+    release(&tickslock);
+  }
+  else
+    np->temp_wait_start = ticks;
+
   return pid;
 }
