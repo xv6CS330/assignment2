@@ -507,6 +507,9 @@ void exit(int status)
       batch_proc_count = 0;
       total_turn_time = 0;
       total_waiting_time = 0;
+      min_completion_time = -1;
+      max_completion_time = -1;
+      sum_completion_time = 0;
     }
   }
 
@@ -785,7 +788,7 @@ void scheduler(void)
         }
         else
           eticks = ticks;
-        printf(" %d ", p->sjf_estm);
+        // printf(" %d ", p->sjf_estm);
         int cpu_burst = eticks - sticks;
         if (cpu_burst > 0)
         {
@@ -796,7 +799,7 @@ void scheduler(void)
         // It should have changed its p->state before coming back.
         c->proc = 0;
 
-        printf(" %d\n", p->sjf_estm);
+        // printf(" %d\n", p->sjf_estm);
       }
       release(&p->lock);
     }
