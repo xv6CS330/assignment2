@@ -495,7 +495,7 @@ void exit(int status)
     sum_completion_time += temp_completion_time;
 
     batch_size--;
-    total_turn_time += p->endtime - p->stime;
+    total_turn_time += p->endtime - p->ctime;
     total_waiting_time += p->total_waiting_time;
     if (batch_size == 0 && batch_end_time == -1)
     {
