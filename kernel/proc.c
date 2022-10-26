@@ -27,6 +27,12 @@ extern char trampoline[]; // trampoline.S
 // must be acquired before any p->lock.
 struct spinlock wait_lock;
 
+int batch_size = 0;
+int batch_proc_count = 0;
+int batch_start_time = -1;
+int batch_end_time = -1;
+int total_turn_time = 0;
+
 // Allocate a page for each process's kernel stack.
 // Map it high in memory, followed by an invalid
 // guard page.
@@ -457,6 +463,25 @@ void exit(int status)
 
   p->endtime = xticks;
 
+  if(p->is_batch==1){
+    batch_size--;
+    total_turn_time += p->endtime-p->stime;
+    if(batch_size==0 && batch_end_time == -1){
+      if (!holding(&tickslock)) {
+        acquire(&tickslock);
+        batch_end_time = ticks;
+        release(&tickslock);
+      }
+      printf("Batch Execution Time: %d\n",batch_end_time-batch_start_time);
+      printf("Average turn-around time: %d\n",total_turn_time/batch_proc_count);
+
+      batch_start_time = -1;
+      batch_end_time = -1;
+      batch_proc_count = 0;
+      total_turn_time = 0;
+    }
+  }
+
   // Jump into the scheduler, never to return.
   sched();
   panic("zombie exit");
@@ -599,6 +624,16 @@ void scheduler(void)
           // before jumping back to us.
           p->state = RUNNING;
           c->proc = p;
+
+          if(p->is_batch == 1 && batch_start_time == -1){
+            if (!holding(&tickslock)) {
+              acquire(&tickslock);
+              batch_start_time = ticks;
+              release(&tickslock);
+            }
+            else batch_start_time = ticks;
+          }
+
           swtch(&c->context, &p->context);
 
           // Process is done running for now.
@@ -1144,5 +1179,8 @@ int forkp(int prio)
   
   np->cpu_usage = 0;
   np->priority = prio;
+
+  batch_size++;
+  batch_proc_count++;
   return pid;
 }
